@@ -1,0 +1,17 @@
+[
+  {
+    "id": "1782644359508",
+    "name": "sam",
+    "email": "samg91198@gmail.com",
+    "password": "$2b$10$UjuwyPJIcy4Y2/YoGMIqXuMRqZwLiDo1oiAmcXoS6ZkZGuTLfLSh2",
+    "age": 19,
+    "refCode": "T1PNPE",
+    "referredBy": null,
+    "pkg": "None",
+    "roi": 0,
+    "balance": 0,
+    "deposited": 0,
+    "referralLink": "http://localhost:5173/ref/T1PNPE",
+    "createdAt": "2026-06-28T10:59:19.508Z"
+  }
+]
