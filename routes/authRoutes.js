@@ -91,4 +91,8 @@ router.post('/login', async (req, res) => {
   res.json({ token, user: userWithoutPassword });
 });
 
+if (user.blocked) {
+  return res.status(403).json({ message: 'Your account has been blocked. Contact support.' });
+}
+
 module.exports = router;

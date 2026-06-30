@@ -159,4 +159,26 @@ router.get('/admin/users', (req, res) => {
   res.json(safeUsers);
 });
 
+// ─── ADMIN: Block / Unblock a user ─────────────────────────
+router.put('/admin/block/:id', (req, res) => {
+  const users = readJSON('users.json');
+  const userIndex = users.findIndex(u => u.id === req.params.id);
+  if (userIndex === -1) return res.status(404).json({ message: 'User not found' });
+
+  users[userIndex].blocked = !users[userIndex].blocked;   // toggle
+  writeJSON('users.json', users);
+  res.json({ message: users[userIndex].blocked ? 'User blocked' : 'User unblocked', user: users[userIndex] });
+});
+
+// ─── ADMIN: Delete a user ──────────────────────────────
+router.delete('/admin/delete/:id', (req, res) => {
+  const users = readJSON('users.json');
+  const filtered = users.filter(u => u.id !== req.params.id);
+  if (filtered.length === users.length) return res.status(404).json({ message: 'User not found' });
+
+  writeJSON('users.json', filtered);
+  // Optionally delete their transactions, withdrawals, etc. (for simplicity, leave them)
+  res.json({ message: 'User deleted' });
+});
+
 module.exports = router;
