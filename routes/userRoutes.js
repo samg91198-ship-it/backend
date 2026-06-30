@@ -13,12 +13,12 @@ function getPackageInfo(totalDeposited) {
   return { pkg: 'None', roi: 0 };
 }
 
-// Package bonus percentages (used for referral commissions)
+// Package bonus percentages (Platinum = 20%, Leader = 30%)
 const packageBonuses = {
   None:     { direct: 0,  l2: 0,   l3: 0,   l4: 0 },
   Bronze:   { direct: 10, l2: 5,   l3: 0,   l4: 0 },
   Silver:   { direct: 15, l2: 5,   l3: 2.5, l4: 0 },
-  Platinum: { direct: 30, l2: 5,   l3: 2.5, l4: 1.75 },
+  Platinum: { direct: 20, l2: 5,   l3: 2.5, l4: 1.75 },
   Leader:   { direct: 30, l2: 5,   l3: 2.5, l4: 1.75 },
 };
 
@@ -82,13 +82,13 @@ router.get('/dashboard', authenticate, (req, res) => {
   // Payout amount = current balance × ROI%
   const payoutAmount = user.balance > 0 ? (user.balance * (roi / 100)).toFixed(2) : '0.00';
 
-  const packageBonuses = {
-  None:     { direct: 0,  l2: 0,   l3: 0,   l4: 0 },
-  Bronze:   { direct: 10, l2: 5,   l3: 0,   l4: 0 },
-  Silver:   { direct: 15, l2: 5,   l3: 2.5, l4: 0 },
-  Platinum: { direct: 20, l2: 5,   l3: 2.5, l4: 1.75 },   // was 30
-  Leader:   { direct: 30, l2: 5,   l3: 2.5, l4: 1.75 },
-};
+  // Package list (Platinum comm = 20%, Leader comm = 30%)
+  const packages = [
+    { tier: 'Bronze',   roi: 10, price: 100,  comm: 10, active: pkg === 'Bronze' },
+    { tier: 'Silver',   roi: 15, price: 500,  comm: 15, active: pkg === 'Silver' },
+    { tier: 'Platinum', roi: 30, price: 1000, comm: 20, active: pkg === 'Platinum' },
+    { tier: 'Leader',   roi: 30, price: 5000, comm: 30, active: pkg === 'Leader' },
+  ];
 
   res.json({
     balance: user.balance,
@@ -110,7 +110,6 @@ router.get('/team', authenticate, (req, res) => {
   const currentUser = users.find(u => u.id === req.userId);
   if (!currentUser) return res.status(404).json({ message: 'User not found' });
 
-  // Only users with an active package can see team (frontend locks, but we also enforce here)
   if (currentUser.deposited < 100) {
     return res.status(403).json({ message: 'Team is locked until you activate a package.' });
   }
@@ -131,7 +130,6 @@ router.get('/team', authenticate, (req, res) => {
     commission: (u.deposited * (bonuses[level] / 100)).toFixed(2),
   }));
 
-  // Total referral income = sum of commissions from direct referrals
   const l1List = mapMembers(l1, 'direct');
   const totalReferralIncome = l1List.reduce((sum, m) => sum + parseFloat(m.commission), 0);
 
@@ -165,7 +163,7 @@ router.put('/admin/block/:id', (req, res) => {
   const userIndex = users.findIndex(u => u.id === req.params.id);
   if (userIndex === -1) return res.status(404).json({ message: 'User not found' });
 
-  users[userIndex].blocked = !users[userIndex].blocked;   // toggle
+  users[userIndex].blocked = !users[userIndex].blocked;
   writeJSON('users.json', users);
   res.json({ message: users[userIndex].blocked ? 'User blocked' : 'User unblocked', user: users[userIndex] });
 });
@@ -177,7 +175,6 @@ router.delete('/admin/delete/:id', (req, res) => {
   if (filtered.length === users.length) return res.status(404).json({ message: 'User not found' });
 
   writeJSON('users.json', filtered);
-  // Optionally delete their transactions, withdrawals, etc. (for simplicity, leave them)
   res.json({ message: 'User deleted' });
 });
 
