@@ -82,13 +82,13 @@ router.get('/dashboard', authenticate, (req, res) => {
   // Payout amount = current balance × ROI%
   const payoutAmount = user.balance > 0 ? (user.balance * (roi / 100)).toFixed(2) : '0.00';
 
-  // Package list matching the new tiers
-  const packages = [
-    { tier: 'Bronze',   roi: 10, price: 100,  comm: 10, active: pkg === 'Bronze' },
-    { tier: 'Silver',   roi: 15, price: 500,  comm: 15, active: pkg === 'Silver' },
-    { tier: 'Platinum', roi: 30, price: 1000, comm: 30, active: pkg === 'Platinum' },
-    { tier: 'Leader',   roi: 30, price: 5000, comm: 30, active: pkg === 'Leader' },
-  ];
+  const packageBonuses = {
+  None:     { direct: 0,  l2: 0,   l3: 0,   l4: 0 },
+  Bronze:   { direct: 10, l2: 5,   l3: 0,   l4: 0 },
+  Silver:   { direct: 15, l2: 5,   l3: 2.5, l4: 0 },
+  Platinum: { direct: 20, l2: 5,   l3: 2.5, l4: 1.75 },   // was 30
+  Leader:   { direct: 30, l2: 5,   l3: 2.5, l4: 1.75 },
+};
 
   res.json({
     balance: user.balance,

@@ -62,4 +62,20 @@ router.get('/unread-count', authenticate, (req, res) => {
   res.json({ count });
 });
 
+// Delete a notification
+router.delete('/:id', authenticate, (req, res) => {
+  const notifications = readJSON('notifications.json');
+  const index = notifications.findIndex(n => n.id === req.params.id);
+  if (index === -1) return res.status(404).json({ message: 'Not found' });
+
+  // Only the recipient or the sender can delete it
+  if (notifications[index].targetUserId !== req.userId && notifications[index].userId !== req.userId) {
+    return res.status(403).json({ message: 'Not authorized' });
+  }
+
+  notifications.splice(index, 1);
+  writeJSON('notifications.json', notifications);
+  res.json({ message: 'Deleted' });
+});
+
 module.exports = router;

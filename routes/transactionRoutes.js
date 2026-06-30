@@ -4,7 +4,6 @@ const { readJSON, writeJSON } = require('../utils/db');
 
 const router = express.Router();
 
-// Helper – same as in userRoutes (copied for simplicity)
 function getPackageInfo(totalDeposited) {
   if (totalDeposited >= 5000) return { pkg: 'Leader',   roi: 30 };
   if (totalDeposited >= 1000) return { pkg: 'Platinum', roi: 30 };
@@ -92,17 +91,37 @@ router.post('/deposit', authenticate, (req, res) => {
   res.json({ message: 'Deposit request submitted. Awaiting admin approval.', deposit });
 });
 
-// ─── ADMIN: Get pending deposits ─────────────────────────
+// ─── ADMIN: Get pending deposits (with user email & name) ─
 router.get('/admin/pending', (req, res) => {
   const transactions = readJSON('transactions.json');
-  const pending = transactions.filter(tx => tx.type === 'deposit' && tx.status === 'pending');
+  const users = readJSON('users.json');
+  const pending = transactions
+    .filter(tx => tx.type === 'deposit' && tx.status === 'pending')
+    .map(tx => {
+      const user = users.find(u => u.id === tx.userId);
+      return {
+        ...tx,
+        userEmail: user?.email || null,
+        userName: user?.name || null,
+      };
+    });
   res.json(pending);
 });
 
-// ─── ADMIN: Get ALL deposits ─────────────────────────────
+// ─── ADMIN: Get ALL deposits (with user email & name) ─────
 router.get('/admin/all', (req, res) => {
   const transactions = readJSON('transactions.json');
-  const allDeposits = transactions.filter(tx => tx.type === 'deposit');
+  const users = readJSON('users.json');
+  const allDeposits = transactions
+    .filter(tx => tx.type === 'deposit')
+    .map(tx => {
+      const user = users.find(u => u.id === tx.userId);
+      return {
+        ...tx,
+        userEmail: user?.email || null,
+        userName: user?.name || null,
+      };
+    });
   res.json(allDeposits);
 });
 
@@ -126,7 +145,6 @@ router.post('/admin/approve/:id', (req, res) => {
     users[userIndex].balance += transactions[txIndex].amount;
     users[userIndex].deposited += transactions[txIndex].amount;
 
-    // Apply new package thresholds
     const { pkg, roi } = getPackageInfo(users[userIndex].deposited);
     users[userIndex].pkg = pkg;
     users[userIndex].roi = roi;

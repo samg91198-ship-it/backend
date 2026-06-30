@@ -7,18 +7,16 @@ const router = express.Router();
 const WITHDRAWALS_FILE = 'withdrawals.json';
 const USERS_FILE = 'users.json';
 
-// Package thresholds (copied for independence)
 function getPackageInfo(totalDeposited) {
   if (totalDeposited >= 5000) return { pkg: 'Leader',   roi: 30 };
-  if (totalDeposited >= 1000) return { pkg: 'Platinum', roi: 30 };
+  if (totalDeposited >= 1000) return { pkg: 'Platinum', roi: 20 };
   if (totalDeposited >= 500)  return { pkg: 'Silver',   roi: 15 };
   if (totalDeposited >= 100)  return { pkg: 'Bronze',   roi: 10 };
   return { pkg: 'None', roi: 0 };
 }
 
-// Direct bonus percentages (same as packageBonuses.direct)
 function getDirectBonus(pkg) {
-  const map = { None: 0, Bronze: 10, Silver: 15, Platinum: 30, Leader: 30 };
+  const map = { None: 0, Bronze: 10, Silver: 15, Platinum: 20, Leader: 30 };
   return map[pkg] || 0;
 }
 
@@ -68,7 +66,7 @@ router.post('/withdraw', authenticate, (req, res) => {
   });
 });
 
-// ─── ADMIN: Get pending withdrawals ─────────────────────
+// ─── ADMIN: Get pending withdrawals (userEmail & userName already stored) ─
 router.get('/admin/pending', (req, res) => {
   const withdrawals = readJSON(WITHDRAWALS_FILE);
   const pending = withdrawals.filter(w => w.status === 'pending');
@@ -94,18 +92,16 @@ router.post('/admin/approve/:id', (req, res) => {
   withdrawals[index].processedAt = new Date().toISOString();
   writeJSON(WITHDRAWALS_FILE, withdrawals);
 
-  // ----- Referral commission -----
   const users = readJSON(USERS_FILE);
   const withdrawUser = users.find(u => u.id === withdrawals[index].userId);
   if (withdrawUser && withdrawUser.referredBy) {
     const referrer = users.find(u => u.id === withdrawUser.referredBy);
-    if (referrer && referrer.deposited >= 100) { // only active packages earn commission
+    if (referrer && referrer.deposited >= 100) {
       const directBonus = getDirectBonus(referrer.pkg);
       if (directBonus > 0) {
         const commission = parseFloat((withdrawals[index].amount * (directBonus / 100)).toFixed(2));
         referrer.balance += commission;
 
-        // Record referral transaction
         const transactions = readJSON('transactions.json');
         transactions.push({
           id: Date.now().toString(),
