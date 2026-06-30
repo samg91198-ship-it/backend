@@ -4,26 +4,26 @@ const { readJSON, writeJSON } = require('../utils/db');
 
 const router = express.Router();
 
-// Package bonuses
+// Package thresholds (100‑499 Bronze, 500‑999 Silver, 1000‑4999 Platinum, 5000+ Leader)
+function getPackageInfo(totalDeposited) {
+  if (totalDeposited >= 5000) return { pkg: 'Leader',   roi: 30 };
+  if (totalDeposited >= 1000) return { pkg: 'Platinum', roi: 30 };
+  if (totalDeposited >= 500)  return { pkg: 'Silver',   roi: 15 };
+  if (totalDeposited >= 100)  return { pkg: 'Bronze',   roi: 10 };
+  return { pkg: 'None', roi: 0 };
+}
+
+// Package bonus percentages (used for referral commissions)
 const packageBonuses = {
-  None:    { direct: 0,  l2: 0,   l3: 0,   l4: 0 },
-  Bronze:  { direct: 10, l2: 5,   l3: 0,   l4: 0 },
-  Silver:  { direct: 15, l2: 5,   l3: 2.5, l4: 0 },
-  Gold:    { direct: 20, l2: 5,   l3: 2.5, l4: 1.75 },
-  Platinum:{ direct: 30, l2: 5,   l3: 2.5, l4: 1.75 },
+  None:     { direct: 0,  l2: 0,   l3: 0,   l4: 0 },
+  Bronze:   { direct: 10, l2: 5,   l3: 0,   l4: 0 },
+  Silver:   { direct: 15, l2: 5,   l3: 2.5, l4: 0 },
+  Platinum: { direct: 30, l2: 5,   l3: 2.5, l4: 1.75 },
+  Leader:   { direct: 30, l2: 5,   l3: 2.5, l4: 1.75 },
 };
 
 function getInitials(name) {
   return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
-}
-
-// Utility: assign package based on balance
-function assignPackage(balance) {
-  if (balance >= 5000) return { pkg: 'Platinum', roi: 30 };
-  if (balance >= 1000) return { pkg: 'Gold', roi: 20 };
-  if (balance >= 500)  return { pkg: 'Silver', roi: 15 };
-  if (balance >= 100)  return { pkg: 'Bronze', roi: 10 };
-  return { pkg: 'None', roi: 0 };
 }
 
 // ─── PROFILE ──────────────────────────────────────────────
@@ -59,20 +59,13 @@ router.get('/dashboard', authenticate, (req, res) => {
   const user = users.find(u => u.id === req.userId);
   if (!user) return res.status(404).json({ message: 'User not found' });
 
-  // Package is based on TOTAL DEPOSITED (never downgrades)
-  let pkg = 'None';
-  let roi = 0;
-  if (user.deposited >= 5000) { pkg = 'Platinum'; roi = 30; }
-  else if (user.deposited >= 1000) { pkg = 'Gold'; roi = 20; }
-  else if (user.deposited >= 500) { pkg = 'Silver'; roi = 15; }
-  else if (user.deposited >= 100) { pkg = 'Bronze'; roi = 10; }
-
-  // Update user's package and roi (in case they upgraded)
+  // Update package based on total deposited (never downgrades)
+  const { pkg, roi } = getPackageInfo(user.deposited);
   user.pkg = pkg;
   user.roi = roi;
   writeJSON('users.json', users);
 
-  // Real team counts (unchanged)
+  // Real team counts
   const direct = users.filter(u => u.referredBy === req.userId);
   const l1Ids = direct.map(u => u.id);
   const l2 = users.filter(u => l1Ids.includes(u.referredBy));
@@ -80,7 +73,7 @@ router.get('/dashboard', authenticate, (req, res) => {
   const l3 = users.filter(u => l2Ids.includes(u.referredBy));
   const totalNetwork = direct.length + l2.length + l3.length;
 
-  // Next payout date
+  // Next payout date (30 days after last payout or signup)
   const lastPayout = user.lastPayout ? new Date(user.lastPayout) : new Date(user.createdAt);
   const nextPayout = new Date(lastPayout);
   nextPayout.setDate(nextPayout.getDate() + 30);
@@ -88,6 +81,14 @@ router.get('/dashboard', authenticate, (req, res) => {
 
   // Payout amount = current balance × ROI%
   const payoutAmount = user.balance > 0 ? (user.balance * (roi / 100)).toFixed(2) : '0.00';
+
+  // Package list matching the new tiers
+  const packages = [
+    { tier: 'Bronze',   roi: 10, price: 100,  comm: 10, active: pkg === 'Bronze' },
+    { tier: 'Silver',   roi: 15, price: 500,  comm: 15, active: pkg === 'Silver' },
+    { tier: 'Platinum', roi: 30, price: 1000, comm: 30, active: pkg === 'Platinum' },
+    { tier: 'Leader',   roi: 30, price: 5000, comm: 30, active: pkg === 'Leader' },
+  ];
 
   res.json({
     balance: user.balance,
@@ -99,12 +100,7 @@ router.get('/dashboard', authenticate, (req, res) => {
     payoutAmount,
     directAffiliates: direct.length,
     totalNetwork,
-    packages: [
-      { tier: 'Bronze', roi: 10, price: 100, comm: 10, active: pkg === 'Bronze' },
-      { tier: 'Silver', roi: 15, price: 500, comm: 15, active: pkg === 'Silver' },
-      { tier: 'Gold', roi: 20, price: 1000, comm: 20, active: pkg === 'Gold' },
-      { tier: 'Platinum', roi: 30, price: 5000, comm: 30, active: pkg === 'Platinum' },
-    ],
+    packages,
   });
 });
 
@@ -113,6 +109,11 @@ router.get('/team', authenticate, (req, res) => {
   const users = readJSON('users.json');
   const currentUser = users.find(u => u.id === req.userId);
   if (!currentUser) return res.status(404).json({ message: 'User not found' });
+
+  // Only users with an active package can see team (frontend locks, but we also enforce here)
+  if (currentUser.deposited < 100) {
+    return res.status(403).json({ message: 'Team is locked until you activate a package.' });
+  }
 
   const userPkg = currentUser.pkg || 'None';
   const bonuses = packageBonuses[userPkg];
@@ -130,27 +131,28 @@ router.get('/team', authenticate, (req, res) => {
     commission: (u.deposited * (bonuses[level] / 100)).toFixed(2),
   }));
 
+  // Total referral income = sum of commissions from direct referrals
+  const l1List = mapMembers(l1, 'direct');
+  const totalReferralIncome = l1List.reduce((sum, m) => sum + parseFloat(m.commission), 0);
+
   res.json({
-    direct: { count: l1.length, members: mapMembers(l1, 'direct').slice(0, 3) },
+    direct: { count: l1.length, members: l1List.slice(0, 3) },
     l2:     { count: l2.length, members: mapMembers(l2, 'l2').slice(0, 2) },
     l3:     { count: l3.length, members: mapMembers(l3, 'l3').slice(0, 2) },
+    totalReferralIncome,
   });
 });
 
-// ADMIN: Platform statistics
+// ─── ADMIN: Platform statistics ──────────────────────────
 router.get('/admin/stats', (req, res) => {
   const users = readJSON('users.json');
   const totalBalance = users.reduce((sum, u) => sum + (u.balance || 0), 0);
   const totalDeposited = users.reduce((sum, u) => sum + (u.deposited || 0), 0);
   const totalUsers = users.length;
-  res.json({
-    totalBalance,
-    totalDeposited,
-    totalUsers,
-  });
+  res.json({ totalBalance, totalDeposited, totalUsers });
 });
 
-// ADMIN: Get all users (without passwords)
+// ─── ADMIN: Get all users ────────────────────────────────
 router.get('/admin/users', (req, res) => {
   const users = readJSON('users.json');
   const safeUsers = users.map(({ password, ...rest }) => rest);

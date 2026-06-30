@@ -7,13 +7,9 @@ const withdrawalRoutes = require('./routes/withdrawalRoutes');
 const reviewRoutes = require('./routes/reviewRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const reportRoutes = require('./routes/reportRoutes');
+
 const app = express();
-const PORT = process.env.PORT || 5000;
-
-// 👇 DEFAULT REFERRAL BASE FOR DEVELOPMENT
-process.env.REFERRAL_BASE_URL = process.env.REFERRAL_BASE_URL || 'https://tarde4sure.netlify.app/';
-
-process.env.ADMIN_WALLET = process.env.ADMIN_WALLET || 'TXyz123456789AdminWalletAddress';
+const PORT = 8080;
 
 // Middleware
 app.use(cors());
@@ -33,6 +29,6 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-app.listen(PORT, () => {
-  console.log(`Backend running on http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Backend running on http://0.0.0.0:${PORT}`);
 });

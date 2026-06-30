@@ -4,9 +4,18 @@ const { readJSON, writeJSON } = require('../utils/db');
 
 const router = express.Router();
 
+// Helper – same as in userRoutes (copied for simplicity)
+function getPackageInfo(totalDeposited) {
+  if (totalDeposited >= 5000) return { pkg: 'Leader',   roi: 30 };
+  if (totalDeposited >= 1000) return { pkg: 'Platinum', roi: 30 };
+  if (totalDeposited >= 500)  return { pkg: 'Silver',   roi: 15 };
+  if (totalDeposited >= 100)  return { pkg: 'Bronze',   roi: 10 };
+  return { pkg: 'None', roi: 0 };
+}
+
 const ADMIN_WALLET = process.env.ADMIN_WALLET || 'TXyz123456789AdminWalletAddress';
 
-// ─── HISTORY (merged: deposits + withdrawals) ────────────
+// ─── HISTORY ──────────────────────────────────────────────
 router.get('/history', authenticate, (req, res) => {
   const transactions = readJSON('transactions.json')
     .filter(tx => tx.userId === req.userId)
@@ -48,7 +57,7 @@ router.get('/history', authenticate, (req, res) => {
   res.json(result);
 });
 
-// ─── DEPOSIT REQUEST (user submits) ──────────────────────
+// ─── DEPOSIT REQUEST ──────────────────────────────────────
 router.post('/deposit', authenticate, (req, res) => {
   const { amount, transactionHash } = req.body;
 
@@ -90,7 +99,7 @@ router.get('/admin/pending', (req, res) => {
   res.json(pending);
 });
 
-// ADMIN: Get ALL deposits (pending, approved, rejected)
+// ─── ADMIN: Get ALL deposits ─────────────────────────────
 router.get('/admin/all', (req, res) => {
   const transactions = readJSON('transactions.json');
   const allDeposits = transactions.filter(tx => tx.type === 'deposit');
@@ -117,11 +126,10 @@ router.post('/admin/approve/:id', (req, res) => {
     users[userIndex].balance += transactions[txIndex].amount;
     users[userIndex].deposited += transactions[txIndex].amount;
 
-    const total = users[userIndex].deposited;
-    if (total >= 5000) { users[userIndex].pkg = 'Platinum'; users[userIndex].roi = 30; }
-    else if (total >= 1000) { users[userIndex].pkg = 'Gold'; users[userIndex].roi = 20; }
-    else if (total >= 500) { users[userIndex].pkg = 'Silver'; users[userIndex].roi = 15; }
-    else if (total >= 100) { users[userIndex].pkg = 'Bronze'; users[userIndex].roi = 10; }
+    // Apply new package thresholds
+    const { pkg, roi } = getPackageInfo(users[userIndex].deposited);
+    users[userIndex].pkg = pkg;
+    users[userIndex].roi = roi;
 
     writeJSON('users.json', users);
   }
@@ -141,7 +149,6 @@ router.post('/admin/reject/:id', (req, res) => {
     return res.status(400).json({ message: 'Deposit is not pending' });
   }
 
-  // Mark as rejected (no balance change)
   transactions[txIndex].status = 'rejected';
   transactions[txIndex].label = `Deposit rejected — $${transactions[txIndex].amount}`;
   writeJSON('transactions.json', transactions);
