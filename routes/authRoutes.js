@@ -5,7 +5,8 @@ const { readJSON, writeJSON } = require('../utils/db');
 const { JWT_SECRET } = require('../middleware/auth');
 
 const router = express.Router();
-const REFERRAL_BASE = process.env.REFERRAL_BASE_URL || 'https://tarde4sure.netlify.app/';
+
+const REFERRAL_BASE = process.env.REFERRAL_BASE_URL || 'https://tarde4sure.netlify.app';
 
 function generateRefCode(users, length = 6) {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -38,11 +39,9 @@ router.post('/signup', async (req, res) => {
     return res.status(400).json({ message: 'An account with this email already exists' });
   }
 
-  // Process referral code
   let referredBy = null;
   if (refCode && refCode.trim() !== '') {
-    const cleaned = refCode.trim().toUpperCase();
-    const referrer = users.find(u => u.refCode === cleaned);
+    const referrer = users.find(u => u.refCode === refCode.trim().toUpperCase());
     if (!referrer) {
       return res.status(400).json({ message: 'Invalid referral code' });
     }
@@ -60,6 +59,7 @@ router.post('/signup', async (req, res) => {
     age: ageNum,
     refCode: newRefCode,
     referredBy,
+    blocked: false,                 // ✅ new users are not blocked
     pkg: 'None',
     roi: 0,
     balance: 0,
@@ -81,18 +81,26 @@ router.post('/login', async (req, res) => {
   if (!email || !password) {
     return res.status(400).json({ message: 'Email and password are required' });
   }
+
   const users = readJSON('users.json');
   const user = users.find(u => u.email === email);
-  if (!user) return res.status(400).json({ message: 'Invalid credentials' });
+  if (!user) {
+    return res.status(400).json({ message: 'Invalid credentials' });
+  }
+
+  // ✅ Blocked check – moved INSIDE the login route, where `user` is defined
+  if (user.blocked) {
+    return res.status(403).json({ message: 'Your account has been blocked. Contact support.' });
+  }
+
   const isMatch = await bcrypt.compare(password, user.password);
-  if (!isMatch) return res.status(400).json({ message: 'Invalid credentials' });
+  if (!isMatch) {
+    return res.status(400).json({ message: 'Invalid credentials' });
+  }
+
   const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
   const { password: _, ...userWithoutPassword } = user;
   res.json({ token, user: userWithoutPassword });
 });
-
-if (user.blocked) {
-  return res.status(403).json({ message: 'Your account has been blocked. Contact support.' });
-}
 
 module.exports = router;
