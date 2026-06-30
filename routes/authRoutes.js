@@ -103,4 +103,22 @@ router.post('/login', async (req, res) => {
   res.json({ token, user: userWithoutPassword });
 });
 
+// ─── ADMIN LOGIN ──────────────────────────────────────
+router.post('/admin/login', (req, res) => {
+  const { password } = req.body;
+  const adminPassword = process.env.ADMIN_PASSWORD;
+
+  if (!adminPassword) {
+    return res.status(500).json({ message: 'Admin password not configured' });
+  }
+
+  if (!password || password !== adminPassword) {
+    return res.status(403).json({ message: 'Invalid admin password' });
+  }
+
+  const token = jwt.sign({ isAdmin: true }, JWT_SECRET, { expiresIn: '24h' });
+  res.json({ token });
+});
+
+
 module.exports = router;
